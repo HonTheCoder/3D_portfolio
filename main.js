@@ -1,129 +1,141 @@
-import * as THREE from 'https://esm.sh/three@0.152.2';
-import { PointerLockControls } from 'https://esm.sh/three@0.152.2/examples/jsm/controls/PointerLockControls.js';
+import * as THREE from 'https://esm.sh/three';
+import { GLTFLoader } from 'https://esm.sh/three/examples/jsm/loaders/GLTFLoader.js';
+import { PointerLockControls } from 'https://esm.sh/three/examples/jsm/controls/PointerLockControls.js';
+import { DeviceOrientationControls } from 'https://esm.sh/three/examples/jsm/controls/DeviceOrientationControls.js';
 
 // Scene setup
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0xa7d8ff, 10, 60);
+scene.fog = new THREE.Fog(0xa7d8ff, 10, 200);
 
 // Camera
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.y = 1.6;
 
 // Renderer
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// Lighting
-const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
-hemiLight.position.set(0, 20, 0);
-scene.add(hemiLight);
-
-const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
-dirLight.position.set(3, 10, 10);
-scene.add(dirLight);
-
-// Floor
-const floorGeo = new THREE.PlaneGeometry(100, 100);
-const floorMat = new THREE.MeshToonMaterial({ color: 0xfef6e4 });
-const floor = new THREE.Mesh(floorGeo, floorMat);
-floor.rotation.x = -Math.PI / 2;
-scene.add(floor);
-
-// Room walls
-const wallMat = new THREE.MeshToonMaterial({ color: 0xffdab9 });
-const wallGeo = new THREE.BoxGeometry(10, 4, 0.2);
-
-const backWall = new THREE.Mesh(wallGeo, wallMat);
-backWall.position.set(0, 2, -5);
-scene.add(backWall);
-
-const leftWall = new THREE.Mesh(wallGeo, wallMat);
-leftWall.rotation.y = Math.PI / 2;
-leftWall.position.set(-5, 2, 0);
-scene.add(leftWall);
-
-const rightWall = leftWall.clone();
-rightWall.position.set(5, 2, 0);
-scene.add(rightWall);
-
-// Lamp object
-const lampGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.5, 16);
-const lampMat = new THREE.MeshToonMaterial({ color: 0xdddd00 });
-const lamp = new THREE.Mesh(lampGeo, lampMat);
-lamp.position.set(-3, 0.25, -3);
-lamp.name = "lamp";
-scene.add(lamp);
-
-const lampLight = new THREE.PointLight(0xfffaaa, 1, 5);
-lampLight.position.set(-3, 1.5, -3);
-scene.add(lampLight);
-let lampOn = true;
-
-// Laptop object
-const laptopGeo = new THREE.BoxGeometry(0.6, 0.03, 0.4);
-const laptopMat = new THREE.MeshToonMaterial({ color: 0x666666 });
-const laptop = new THREE.Mesh(laptopGeo, laptopMat);
-laptop.position.set(3, 0.02, -3);
-laptop.name = "laptop";
-scene.add(laptop);
-
 // Controls
 const controls = new PointerLockControls(camera, document.body);
 document.body.addEventListener('click', () => controls.lock());
-scene.add(controls.getObject());
+scene.add(controls.object); // ✅ no deprecated method
+
+let isMobile = /Mobi|Android/i.test(navigator.userAgent);
+let mobileControls;
+
+if (isMobile) {
+  mobileControls = new DeviceOrientationControls(camera);
+  console.log('📱 Using DeviceOrientationControls for mobile');
+} else {
+  scene.add(controls.object);
+  document.body.addEventListener('click', () => controls.lock());
+}
+
+// Light
+const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
+hemiLight.position.set(0, 100, 0);
+scene.add(hemiLight);
 
 // Movement
 const keys = {};
-document.addEventListener('keydown', e => keys[e.code] = true);
-document.addEventListener('keyup', e => keys[e.code] = false);
+document.addEventListener('keydown', (e) => (keys[e.code] = true));
+document.addEventListener('keyup', (e) => (keys[e.code] = false));
 
-let velocity = new THREE.Vector3();
-let direction = new THREE.Vector3();
+const velocity = new THREE.Vector3();
+const direction = new THREE.Vector3();
+const moveSpeed = 0.040; // ✅ slower movement
+
+let environmentBox = null;
+
+// Load scene
+const loader = new GLTFLoader();
+loader.load(
+  'models/scene.gltf',
+  (gltf) => {
+    const model = gltf.scene;
+    model.scale.set(0.02, 0.02, 0.02);
+    scene.add(model);
+
+    // Get bounding box
+    environmentBox = new THREE.Box3().setFromObject(model);
+    const center = new THREE.Vector3();
+    const size = new THREE.Vector3();
+    environmentBox.getCenter(center);
+    environmentBox.getSize(size);
+
+    // ✅ Set player inside scene, near bottom center
+    const groundY = environmentBox.min.y;
+    camera.position.set(center.x, groundY + 1.6, center.z);
+
+    console.log('Spawned at:', camera.position);
+  },
+  undefined,
+  (err) => {
+    console.error('GLTF load error:', err);
+  }
+);
 
 function animate() {
   requestAnimationFrame(animate);
 
-  direction.z = Number(keys['KeyW']) - Number(keys['KeyS']);
-  direction.x = Number(keys['KeyD']) - Number(keys['KeyA']);
-  direction.normalize();
+  if (isMobile && mobileControls) {
+  mobileControls.update(); // use gyro to rotate camera
+  }
 
-  if (controls.isLocked) {
-    velocity.x -= velocity.x * 0.8;
-    velocity.z -= velocity.z * 0.8;
+  if (controls.isLocked && environmentBox) {
+    const moveForward = keys['KeyW'] ? 1 : 0;
+    const moveBackward = keys['KeyS'] ? 1 : 0;
+    const moveLeft = keys['KeyA'] ? 1 : 0;
+    const moveRight = keys['KeyD'] ? 1 : 0;
 
-    if (direction.length() > 0) {
-      velocity.z -= direction.z * 0.8;
-      velocity.x -= direction.x * 0.8;
+    // Set direction vector
+    direction.set(0, 0, 0);
+    if (moveForward) direction.z += 1;
+    if (moveBackward) direction.z -= 1;
+    if (moveLeft) direction.x -= 1;
+    if (moveRight) direction.x += 1;
+    direction.normalize();
+
+    // Get forward vector (camera direction)
+    const frontVector = new THREE.Vector3();
+    controls.getDirection(frontVector);
+    frontVector.y = 0;
+    frontVector.normalize();
+
+    // Get right vector — FIXED DIRECTION
+    const sideVector = new THREE.Vector3();
+    sideVector.crossVectors(frontVector, camera.up).normalize(); // ✅ FIXED HERE
+
+    // Combine into movement vector
+    const moveVector = new THREE.Vector3();
+    moveVector
+      .addScaledVector(frontVector, direction.z * moveSpeed)
+      .addScaledVector(sideVector, direction.x * moveSpeed);
+
+    // Predict next position
+    const currentPos = controls.object.position.clone();
+    const nextPos = currentPos.clone().add(moveVector);
+
+    const playerBox = new THREE.Box3().setFromCenterAndSize(
+      new THREE.Vector3(nextPos.x, nextPos.y, nextPos.z),
+      new THREE.Vector3(0.5, 1.7, 0.5)
+    );
+
+    if (environmentBox.containsBox(playerBox)) {
+      controls.object.position.copy(nextPos);
     }
-
-    controls.moveRight(-velocity.x);
-    controls.moveForward(-velocity.z);
   }
 
   renderer.render(scene, camera);
 }
+function setKey(code, pressed) {
+  keys[code] = pressed;
+}
 animate();
 
-// Raycasting for interaction
-const raycaster = new THREE.Raycaster();
-
-document.addEventListener('keydown', (e) => {
-  if (e.code === 'Space' && controls.isLocked) {
-    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
-    const intersects = raycaster.intersectObjects([lamp, laptop]);
-
-    if (intersects.length > 0) {
-      const obj = intersects[0].object;
-
-      if (obj.name === 'lamp') {
-        lampOn = !lampOn;
-        lampLight.intensity = lampOn ? 1 : 0;
-      }
-
-      if (obj.name === 'laptop') {
-        document.getElementById('laptop-ui').style.display = 'block';
-      }
-    }
-  }
+// Resize
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
 });

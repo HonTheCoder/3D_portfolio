@@ -6,16 +6,25 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-    <div id="laptop-ui" style="display:none;">
-  <div class="popup">
-    <h2>📂 My Projects</h2>
-    <ul>
-      <li><a href="https://github.com/your/project1" target="_blank">Project 1</a></li>
-      <li><a href="https://github.com/your/project2" target="_blank">Project 2</a></li>
-    </ul>
-    <button onclick="document.getElementById('laptop-ui').style.display='none'">Close</button>
+  <div id="laptop-ui" style="display:none;">
+    <div class="popup">
+      <h2>📂 My Projects</h2>
+      <ul>
+        <li><a href="https://github.com/your/project1" target="_blank">Project 1</a></li>
+        <li><a href="https://github.com/your/project2" target="_blank">Project 2</a></li>
+      </ul>
+      <button onclick="document.getElementById('laptop-ui').style.display='none'">Close</button>
+    </div>
+
+    
+    <div id="mobile-controls" style="position: absolute; bottom: 20px; left: 20px; z-index: 10;">
+    <button onclick="setKey('KeyW', true)" ontouchstart="setKey('KeyW', true)" ontouchend="setKey('KeyW', false)">↑</button><br>
+    <button onclick="setKey('KeyA', true)" ontouchstart="setKey('KeyA', true)" ontouchend="setKey('KeyA', false)">←</button>
+    <button onclick="setKey('KeyS', true)" ontouchstart="setKey('KeyS', true)" ontouchend="setKey('KeyS', false)">↓</button>
+    <button onclick="setKey('KeyD', true)" ontouchstart="setKey('KeyD', true)" ontouchend="setKey('KeyD', false)">→</button>
+    </div>
+
   </div>
-</div>
   <div id="instructions">Click to move • Space = Interact</div>
   <script type="module" src="main.js"></script>
 </body>
